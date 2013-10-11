@@ -1,0 +1,9 @@
+{
+    "version": "1",
+    "name": "FireZip",
+    "launch_path": "/index.html",
+    "type": "privileged",
+    "permissions": {
+		"device-storage:sdcard": { "access": "readonly" }
+	}
+}
