@@ -11,36 +11,57 @@
     };
   }
 
+  app.File = (function() {
+    File.prototype.name = '';
+
+    File.prototype.path = '';
+
+    File.prototype.data = null;
+
+    File.prototype.isDirectory = false;
+
+    function File(name, path, data, isDirectory) {
+      this.name = name;
+      this.path = path;
+      this.data = data;
+      this.isDirectory = isDirectory;
+      this.files = {};
+    }
+
+    return File;
+
+  })();
+
   app.Browser = (function() {
-    function _Class(page) {
+    function Browser(page) {
       var _this = this;
       this.page = page;
       this.addItem = __bind(this.addItem, this);
-      this.files = {};
-      page.bind('pageshow', function(data) {
+      this.root = new app.File('', '', null, true);
+      page.bind('pageshow', function() {
         return _this.enumerate();
       });
     }
 
-    _Class.prototype.addFile = function(directory, filename, data) {
+    Browser.prototype.addFile = function(directory, filename, data) {
       var directoryName, slashPosition;
       if (filename === '') {
         return;
       }
       slashPosition = filename.indexOf('/');
       if (slashPosition !== -1) {
-        directoryName = filename.substr(0, slashPosition + 1);
+        directoryName = filename.substr(0, slashPosition);
         filename = filename.substr(slashPosition + 1);
-        if (!directory[directoryName]) {
-          directory[directoryName] = {};
+        if (!directory.files[directoryName]) {
+          directory.files[directoryName] = new app.File(directoryName, directory.path + '/' + directoryName, data, true);
         }
-        this.addFile(directory[directoryName], filename);
+        this.addFile(directory.files[directoryName], filename, data);
         return;
       }
-      return directory[filename] = data;
+      return directory.files[filename] = new app.File(filename, directory.path + '/' + filename, data, false);
     };
 
-    _Class.prototype.addItem = function(name, path, data, isDir) {
+    Browser.prototype.addItem = function(name, path, data, isDir) {
       var element,
         _this = this;
       element = $('<li>').html("<a>" + name + "</a>");
@@ -53,9 +74,9 @@
       return element;
     };
 
-    _Class.prototype.showDirectory = function(dirname) {
-      var data, directory, name, part, _i, _len, _ref;
-      directory = this.files;
+    Browser.prototype.showDirectory = function(dirname) {
+      var directory, file, part, _, _i, _len, _ref, _ref1;
+      directory = this.root;
       if ((dirname != null ? dirname[0] : void 0) === '/') {
         dirname = dirname.slice(1);
       }
@@ -66,7 +87,7 @@
         _ref = dirname.split('/');
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           part = _ref[_i];
-          directory = directory[part + '/'];
+          directory = directory.files[part];
         }
       } else {
         dirname = '';
@@ -75,13 +96,14 @@
       if (dirname !== '') {
         this.addItem('..', '/' + dirname.slice(0, ('/' + dirname).lastIndexOf('/')), {}, true);
       }
-      for (name in directory) {
-        data = directory[name];
-        this.addItem(name, "" + dirname + "/" + name, data, name.indexOf('/') !== -1);
+      _ref1 = directory.files;
+      for (_ in _ref1) {
+        file = _ref1[_];
+        this.addItem(file.name, file.path, file.data, file.isDirectory);
       }
     };
 
-    return _Class;
+    return Browser;
 
   })();
 
@@ -106,7 +128,7 @@
           return;
         }
         if (this.result.type === 'application/zip') {
-          browser.addFile(browser.files, this.result.name, this.result);
+          browser.addFile(browser.root, this.result.name, this.result);
         }
         this["continue"]();
       };
@@ -141,17 +163,15 @@
       if (app.currentFile.indexOf('/') === 0) {
         app.currentFile = app.currentFile.slice(1);
       }
-      console.log(app.currentFile);
       request = sdcard.get(app.currentFile);
       browser = this;
       request.onsuccess = function() {
         return zip.createReader(new zip.BlobReader(this.result), function(reader) {
-          console.log(reader);
           return reader.getEntries(function(entries) {
             var entry, _i, _len;
             for (_i = 0, _len = entries.length; _i < _len; _i++) {
               entry = entries[_i];
-              browser.addFile(browser.files, entry.filename, entry);
+              browser.addFile(browser.root, entry.filename, entry);
             }
             return browser.showDirectory();
           });
@@ -169,3 +189,7 @@
   });
 
 }).call(this);
+
+/*
+//@ sourceMappingURL=filebrowser.map
+*/

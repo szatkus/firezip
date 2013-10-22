@@ -1,24 +1,33 @@
 window.app ?= {
   currentFile: 'lesson32.zip'
 }
-app.Browser = class
+
+class app.File
+	name: ''
+	path: ''
+	data: null
+	isDirectory: false
+	constructor: (@name, @path, @data, @isDirectory) ->
+		@files = {}
+
+class app.Browser
 
     constructor: (@page) ->
-      @files = {}
-      page.bind 'pageshow', (data) => @enumerate()
+      @root = new app.File('', '', null, true)
+      page.bind 'pageshow', () => @enumerate()
     
     addFile: (directory, filename, data) ->
       if filename is ''
         return
       slashPosition = filename.indexOf('/')
       if slashPosition != -1
-        directoryName = filename.substr(0, slashPosition + 1)
+        directoryName = filename.substr(0, slashPosition)
         filename = filename.substr(slashPosition + 1)
-        if !directory[directoryName]
-          directory[directoryName] = {}
-        @addFile(directory[directoryName], filename)
+        unless directory.files[directoryName]
+          directory.files[directoryName] = new app.File(directoryName, directory.path + '/' + directoryName, data, true)
+        @addFile(directory.files[directoryName], filename, data)
         return
-      directory[filename] = data
+      directory.files[filename] = new app.File(filename, directory.path + '/' + filename, data, false)
       
     addItem: (name, path, data, isDir) =>
       element = $('<li>').html("<a>#{name}</a>")
@@ -29,14 +38,15 @@ app.Browser = class
       return element
     
     showDirectory: (dirname) ->
-      directory = @files
+      directory = @root
+      
       if dirname?[0] == '/'
           dirname = dirname[1..]
       if dirname?[dirname.length - 1] == '/'
         dirname = dirname[...dirname.length - 1]
       if dirname
         for part in dirname.split('/')
-          directory = directory[part + '/']
+          directory = directory.files[part]
       else
         dirname = ''
       @page.find('ul').html('')
@@ -44,11 +54,11 @@ app.Browser = class
       
       if dirname != ''
         @addItem('..', '/' + dirname[0...('/' + dirname).lastIndexOf('/')], {}, true)
-      for name, data of directory
-        @addItem(name, "#{dirname}/#{name}", data, name.indexOf('/') != -1)
+      for _, file of directory.files
+        @addItem(file.name, file.path, file.data, file.isDirectory)
       
       return
-    
+
 class app.FileBrowser extends app.Browser
     enumerate: -> 
       sdcard = navigator.getDeviceStorage('sdcard')
@@ -59,15 +69,16 @@ class app.FileBrowser extends app.Browser
         if !@result
           $('.ui-loading').hide()
           browser.showDirectory()
+          
           return
         
         if @result.type == 'application/zip'
-          browser.addFile(browser.files, @result.name, @result)
+          browser.addFile(browser.root, @result.name, @result)
         @continue()
         return
     addItem: (name, path, data, isDir) ->
       element = super
-      if (!isDir)
+      unless isDir
         element.bind 'vclick', ->
           # ugly :/
           app.currentFile = path
@@ -78,15 +89,13 @@ class app.ZipBrowser extends app.Browser
       sdcard = navigator.getDeviceStorage('sdcard')
       if app.currentFile.indexOf('/') is 0
         app.currentFile = app.currentFile[1..]
-      console.log(app.currentFile)
       request = sdcard.get(app.currentFile)
       browser = this
       request.onsuccess = ->
         zip.createReader new zip.BlobReader(@result), (reader) -> 
-          console.log(reader)
           reader.getEntries (entries) ->
             for entry in entries
-              browser.addFile(browser.files, entry.filename, entry)
+              browser.addFile(browser.root, entry.filename, entry)
             browser.showDirectory()
       return
 
